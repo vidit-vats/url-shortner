@@ -1,0 +1,37 @@
+{
+	"name": "auth-as-a-service",
+	"version": "1.0.0",
+	"description": "An Auth service that aims to contain almost every functionality related to Authentication. ",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"dev": "node --watch ./src/index.js",
+		"d:s": "npx drizzle-kit studio",
+		"d:p": "npx drizzle-kit push"
+	},
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/vidit-vats/Authentication-As-A-Service.git"
+	},
+	"author": "",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/vidit-vats/Authentication-As-A-Service/issues"
+	},
+	"homepage": "https://github.com/vidit-vats/Authentication-As-A-Service#readme",
+	"dependencies": {
+		"bcrypt": "^6.0.0",
+		"cookie-parser": "^1.4.7",
+		"cors": "^2.8.5",
+		"dotenv": "^17.2.3",
+		"drizzle-orm": "^0.44.6",
+		"express": "^5.1.0",
+		"joi": "^18.0.1",
+		"jsonwebtoken": "^9.0.2",
+		"pg": "^8.16.3"
+	},
+	"devDependencies": {
+		"drizzle-kit": "^0.31.5"
+	}
+}
