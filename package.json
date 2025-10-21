@@ -1,25 +1,26 @@
 {
-	"name": "auth-as-a-service",
+	"name": "url-shortner",
 	"version": "1.0.0",
-	"description": "An Auth service that aims to contain almost every functionality related to Authentication. ",
+	"description": "",
 	"main": "index.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"dev": "node --watch ./src/index.js",
 		"d:s": "npx drizzle-kit studio",
-		"d:p": "npx drizzle-kit push"
+		"d:g": "npx drizzle-kit generate",
+		"d:m": "npx drizzle-kit migrate"
 	},
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/vidit-vats/Authentication-As-A-Service.git"
+		"url": "git+https://github.com/vidit-vats/url-shortner.git"
 	},
 	"author": "",
 	"license": "ISC",
 	"bugs": {
-		"url": "https://github.com/vidit-vats/Authentication-As-A-Service/issues"
+		"url": "https://github.com/vidit-vats/url-shortner/issues"
 	},
-	"homepage": "https://github.com/vidit-vats/Authentication-As-A-Service#readme",
+	"homepage": "https://github.com/vidit-vats/url-shortner#readme",
 	"dependencies": {
 		"bcrypt": "^6.0.0",
 		"cookie-parser": "^1.4.7",
@@ -27,8 +28,10 @@
 		"dotenv": "^17.2.3",
 		"drizzle-orm": "^0.44.6",
 		"express": "^5.1.0",
+		"ioredis": "^5.8.1",
 		"joi": "^18.0.1",
 		"jsonwebtoken": "^9.0.2",
+		"nanoid": "^5.1.6",
 		"pg": "^8.16.3"
 	},
 	"devDependencies": {

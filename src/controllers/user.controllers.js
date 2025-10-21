@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { usersTable } from '../models/user.models.js';
+import { usersTable } from '../models/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
@@ -107,9 +107,6 @@ const loginUser = asyncHandler(async (req, res) => {
 
 	const { access_token } = await generateAccessToken(userid);
 	const { refresh_token } = await generateRefreshToken(userid);
-
-	console.log('Access Token: ' + access_token);
-	console.log('Refresh Token: ' + refresh_token);
 
 	return res
 		.cookie('access_token', access_token, options)
