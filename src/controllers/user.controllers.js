@@ -146,4 +146,12 @@ const new_refresh_token = asyncHandler(async (req, res) => {
 		.json(new ApiResponse(200, 'New Refresh Token Supplied'));
 });
 
-export { registerUser, loginUser, logoutUser, new_refresh_token };
+const passwordReset = asyncHandler(async (req, res) => {});
+
+export {
+	registerUser,
+	loginUser,
+	logoutUser,
+	new_refresh_token,
+	passwordReset,
+};
