@@ -13,6 +13,6 @@ router.use(validateJWT);
 
 router.route('/short-url').post(longUrlValidation, shortUrl);
 router.route('/redirect/:shorturl').get(redirectShortUrl);
-router.route('/click-count').get(getClickCount);
+router.route('/click-count/:shorturl').get(getClickCount);
 
 export default router;

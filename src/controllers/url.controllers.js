@@ -60,7 +60,7 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 	const result_in_cache = await redis.hgetall(redis_key);
 
 	if (Object.keys(result_in_cache).length !== 0) {
-		console.log('Result Found in Cache :-)');
+		console.log('Result Found in Redis ');
 		await redis.hincrby(redis_key, 'click_count', 1);
 
 		setInterval(async () => {}, 5 * 60 * 1000);
@@ -93,9 +93,36 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 });
 
 const getClickCount = asyncHandler(async (req, res) => {
-	const { shorturl } = req.query;
+	const { shorturl } = req.params;
+	const redis_key = `url:${shorturl}`;
 
-	console.log(shorturl);
+	const clicks = await redis.hget(redis_key, 'click_count').catch((err) => {
+		console.warn('Clicks Count From Redis Failed: ' + err);
+	});
+
+	if (Number(clicks) !== 0)
+		return res.status(200).json(
+			new ApiResponse(
+				200,
+				'Click Count Fetched from Redis Successfully',
+				{
+					click_count: Number(clicks),
+				},
+			),
+		);
+
+	const clicksFromDb = await db
+		.select({
+			click_count: urlTable.click_count,
+		})
+		.from(urlTable)
+		.where(eq(urlTable.short_url, shorturl));
+
+	return res.status(200).json(
+		new ApiResponse(200, 'Click Count Fetched from DB Successfully', {
+			click_count: Number(clicksFromDb[0].click_count),
+		}),
+	);
 });
 
 export { shortUrl, redirectShortUrl, getClickCount };
