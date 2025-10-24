@@ -8,6 +8,27 @@
       "when": 1760943435045,
       "tag": "0000_mushy_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1761296849642,
+      "tag": "0001_romantic_wither",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1761302883229,
+      "tag": "0002_flaky_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1761303400639,
+      "tag": "0003_tranquil_james_howlett",
+      "breakpoints": true
     }
   ]
 }
