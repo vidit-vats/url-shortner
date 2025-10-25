@@ -22,19 +22,22 @@ export const saveClicksToDbFromRedis = async () => {
 			}
 		}
 
-		await pipeline.exec();
+		if (updates.length > 0) {
+			await pipeline.exec();
 
-		await Promise.all(
-			updates.map(({ shortId, clicks }) =>
-				db
-					.update(urlTable)
-					.set({
-						click_count: sql`${urlTable.click_count} + ${clicks}`,
-					})
-					.where(eq(urlTable.short_url, shortId)),
-			),
-		);
-		console.log('  Redis click counts persisted to DB');
+			await Promise.all(
+				updates.map(({ shortId, clicks }) =>
+					db
+						.update(urlTable)
+						.set({
+							click_count: sql`${urlTable.click_count} + ${clicks}`,
+						})
+						.where(eq(urlTable.short_url, shortId)),
+				),
+			);
+			console.log('  Redis click counts persisted to DB');
+		}
+		console.log('No Click Count to Persist');
 	} catch (error) {
 		console.error('Click Persistance to DB Failed by Redis: ' + error);
 	}

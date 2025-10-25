@@ -19,7 +19,7 @@ async function comparePassword(password, hashedPassword) {
 	return await bcrypt.compare(password, hashedPassword);
 }
 
-async function generateAccessToken(userid) {
+export async function generateAccessToken(userid) {
 	const user = await db
 		.select({ id: usersTable.id, username: usersTable.username })
 		.from(usersTable)
@@ -32,7 +32,7 @@ async function generateAccessToken(userid) {
 	return { access_token };
 }
 
-async function generateRefreshToken(userid) {
+export async function generateRefreshToken(userid) {
 	const user = await db
 		.select({ id: usersTable.id, username: usersTable.username })
 		.from(usersTable)
@@ -120,6 +120,7 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
+	console.log('Access Token: ' + req.cookies.access_token);
 	await db
 		.update(usersTable)
 		.set({
@@ -244,6 +245,22 @@ const resetPassword = asyncHandler(async (req, res) => {
 		.json(new ApiResponse(200, 'Password Changed Successfully'));
 });
 
+const googleLogin = asyncHandler(async (req, res) => {
+	const userid = req.user.id;
+	console.log('req.user object:-\n');
+	console.log(req.user);
+
+	const { access_token } = await generateAccessToken(userid);
+	const { refresh_token } = await generateRefreshToken(userid);
+
+	return res.status(200).json(
+		new ApiResponse(200, 'Google Login Successful', {
+			access_token,
+			refresh_token,
+		}),
+	);
+});
+
 export {
 	registerUser,
 	loginUser,
@@ -251,4 +268,5 @@ export {
 	new_refresh_token,
 	grantForgotToken,
 	resetPassword,
+	googleLogin,
 };
