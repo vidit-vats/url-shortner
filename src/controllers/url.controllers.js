@@ -60,7 +60,7 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 	const result_in_cache = await redis.hgetall(redis_key);
 
 	if (Object.keys(result_in_cache).length !== 0) {
-		console.log('Result Found in Redis ');
+		console.log('Result Found in Redis ');
 		await redis.hincrby(redis_key, 'click_count', 1);
 
 		setInterval(async () => {}, 5 * 60 * 1000);

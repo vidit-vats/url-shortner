@@ -35,7 +35,7 @@ export const saveClicksToDbFromRedis = async () => {
 						.where(eq(urlTable.short_url, shortId)),
 				),
 			);
-			console.log('  Redis click counts persisted to DB');
+			console.log('  Redis click counts persisted to DB');
 		}
 		console.log('No Click Count to Persist');
 	} catch (error) {

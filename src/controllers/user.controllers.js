@@ -247,8 +247,6 @@ const resetPassword = asyncHandler(async (req, res) => {
 
 const googleLogin = asyncHandler(async (req, res) => {
 	const userid = req.user.id;
-	console.log('req.user object:-\n');
-	console.log(req.user);
 
 	const { access_token } = await generateAccessToken(userid);
 	const { refresh_token } = await generateRefreshToken(userid);

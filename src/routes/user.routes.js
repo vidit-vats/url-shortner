@@ -12,13 +12,14 @@ import { validationMiddleware } from '../middlewares/validation.middlewares.js';
 import { loginSchemaValidation } from '../middlewares/userlogin.middlewares.js';
 import { validateJWT } from '../middlewares/auth.middlewares.js';
 import { checkForgotToken } from '../middlewares/checkForgotToken.middlewares.js';
+import { limiter } from '../middlewares/ratelimit.middlewares.js';
 import passport from '../utils/passport.utils.js';
 
 const router = Router();
 
 router.route('/register').post(validationMiddleware, registerUser);
 router.route('/login').post(loginSchemaValidation, loginUser);
-router.route('/forgot-password').post(grantForgotToken);
+router.route('/forgot-password').post(limiter, grantForgotToken);
 router.route('/reset-password').post(checkForgotToken, resetPassword);
 
 router.route('/google').get(
