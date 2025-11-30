@@ -43,6 +43,13 @@
       "when": 1761369370515,
       "tag": "0005_pale_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1764501016129,
+      "tag": "0006_tidy_network",
+      "breakpoints": true
     }
   ]
 }
