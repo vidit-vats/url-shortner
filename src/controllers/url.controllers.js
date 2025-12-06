@@ -4,7 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { db } from '../db/index.js';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { redis } from '../db/redis.js';
 
 const shortUrl = asyncHandler(async (req, res) => {
@@ -79,7 +79,7 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 	try {
 		await redis.hset(redis_key, {
 			long_url: result[0].long_url,
-			click_count: result[0].click_count + 1,
+			click_count: 1,
 		});
 		await redis.expire(redis_key, 300);
 	} catch (err) {

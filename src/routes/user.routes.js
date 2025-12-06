@@ -39,9 +39,11 @@ router.route('/google/callback').get(
 );
 // Google Login Ends
 
+// Refresh Token Route
+router.route('/refresh-token').post(new_refresh_token);
+
 router.use(validateJWT);
 
 router.route('/logout').post(logoutUser);
-router.route('/refresh-token').post(new_refresh_token);
 
 export default router;

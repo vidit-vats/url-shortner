@@ -19,34 +19,37 @@ export const saveClicksToDbFromRedis = async () => {
 
 			if (keys.length === 0) continue;
 
-			const pipeline = redis.pipeline();
+			// -------- Pipeline #1: READ --------
+			const readPipe = redis.pipeline();
+			for (const key of keys) readPipe.hgetall(key);
+
+			const rawResults = await readPipe.exec();
+
+			// Collect updates
 			const updates = [];
 
-			// Fetch data for all keys in this batch
-			for (const key of keys) {
-				pipeline.hgetall(key);
-			}
-
-			const results = await pipeline.exec();
-
-			for (let i = 0; i < results.length; i++) {
-				const [err, data] = results[i];
-				if (err || !data || !data.long_url) continue;
+			for (let i = 0; i < rawResults.length; i++) {
+				const [err, data] = rawResults[i];
+				if (err || !data) continue;
 
 				const clicks = Number(data.click_count || 0);
 				if (clicks === 0) continue;
 
 				const shortId = keys[i].split(':')[1];
 				updates.push({ shortId, clicks });
-
-				// Reset Redis click_count atomically
-				pipeline.hset(keys[i], 'click_count', 0);
 			}
 
-			// Apply reset in Redis
-			if (updates.length > 0) await pipeline.exec();
+			// -------- Pipeline #2: RESET --------
+			if (updates.length > 0) {
+				const resetPipe = redis.pipeline();
+				for (const { shortId } of updates) {
+					const key = `url:${shortId}`;
+					resetPipe.hset(key, 'click_count', 0);
+				}
+				await resetPipe.exec();
+			}
 
-			// Update DB in parallel
+			// -------- Update DB --------
 			if (updates.length > 0) {
 				await Promise.all(
 					updates.map(({ shortId, clicks }) =>
@@ -58,12 +61,11 @@ export const saveClicksToDbFromRedis = async () => {
 							.where(eq(urlTable.short_url, shortId)),
 					),
 				);
-				console.log(
-					`✅ Persisted ${updates.length} URLs click counts to DB`,
-				);
+
+				console.log(`✔ Synced ${updates.length} click counters to DB`);
 			}
 		} while (cursor !== 0);
 	} catch (error) {
-		console.error('❌ Click Persistence Failed: ', error);
+		console.error('❌ Sync Failed: ', error);
 	}
 };
