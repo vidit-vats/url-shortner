@@ -4,53 +4,120 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { db } from '../db/index.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { redis } from '../db/redis.js';
 
+const clicksKey = (shortId) => `clicks:${shortId}`;
+const DIRTY_SET_KEY = 'clicks:dirty';
+
+// const shortUrl = asyncHandler(async (req, res) => {
+// 	const { long_url } = req.body;
+// 	if (!long_url) throw new ApiError(400, 'Valid Long URL not supplied');
+
+// 	const shortid = customAlphabet(
+// 		'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890',
+// 		10,
+// 	)();
+
+// 	const savedShortURL = await db
+// 		.insert(urlTable)
+// 		.values({
+// 			long_url,
+// 			short_url: shortid,
+// 			user_id: req.user.id,
+// 		})
+// 		.returning({
+// 			long_url: urlTable.long_url,
+// 			short_url: urlTable.short_url,
+// 			user_id: urlTable.user_id,
+// 			click_count: urlTable.click_count,
+// 		});
+
+// 	if (!savedShortURL.length) throw new ApiError(500, 'Record Saving Failed');
+
+// 	try {
+// 		await redis.hset(`url:${shortid}`, {
+// 			long_url,
+// 		});
+// 		await redis.expire(`url:${shortid}`, 300); // 1 hour
+// 		await redis.set(clicksKey(shortid), '0');
+// 	} catch (err) {
+// 		console.warn('Redis Caching Failed: ' + err);
+// 	}
+
+// 	return res
+// 		.status(200)
+// 		.json(
+// 			new ApiResponse(
+// 				200,
+// 				'Short URL Generated Successfully',
+// 				savedShortURL[0],
+// 			),
+// 		);
+// });
+
 const shortUrl = asyncHandler(async (req, res) => {
-	const { long_url } = req.body;
-	if (!long_url) throw new ApiError(400, 'Valid Long URL not supplied');
+    const { long_url } = req.body;
+    if (!long_url) throw new ApiError(400, 'Valid Long URL not supplied');
 
-	const shortid = customAlphabet(
-		'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890',
-		10,
-	)();
+    const nanoidGenerator = customAlphabet(
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890',
+        10
+    );
 
-	const savedShortURL = await db
-		.insert(urlTable)
-		.values({
-			long_url,
-			short_url: shortid,
-			user_id: req.user.id,
-		})
-		.returning({
-			long_url: urlTable.long_url,
-			short_url: urlTable.short_url,
-			user_id: urlTable.user_id,
-			click_count: urlTable.click_count,
-		});
+    const MAX_RETRIES = 5; 
+    let attempt = 0;
+    let savedShortURL;
 
-	if (!savedShortURL.length) throw new ApiError(500, 'Record Saving Failed');
+    while (attempt < MAX_RETRIES) {
+        const shortid = nanoidGenerator();
+        try {
+            savedShortURL = await db
+                .insert(urlTable)
+                .values({
+                    long_url,
+                    short_url: shortid,
+                    user_id: req.user.id,
+                })
+                .returning({
+                    long_url: urlTable.long_url,
+                    short_url: urlTable.short_url,
+                    user_id: urlTable.user_id,
+                    click_count: urlTable.click_count,
+                });
 
-	try {
-		await redis.hset(`url:${shortid}`, {
-			long_url,
-			click_count: savedShortURL[0].click_count,
-		});
-		await redis.expire(`url:${shortid}`, 300); // 1 hour
-	} catch (err) {
-		console.warn('Redis Caching Failed: ' + err);
-	}
+            // If insert succeeds, break the loop
+            if (savedShortURL.length) break;
+        } catch (err) {
+            // Check if error is unique constraint violation
+            if (err.code === '23505') { // Postgres unique violation error code
+                attempt++;
+                console.warn(`ShortID collision detected, retrying... (attempt ${attempt})`);
+                continue;
+            }
+            // Other DB errors
+            throw err;
+        }
+    }
 
-	return res
-		.status(200)
-		.json(
-			new ApiResponse(
-				200,
-				'Short URL Generated Successfully',
-				savedShortURL[0],
-			),
-		);
+    if (!savedShortURL || !savedShortURL.length) {
+        throw new ApiError(500, 'Failed to generate a unique short URL after retries');
+    }
+
+    // Cache in Redis
+    try {
+        await redis.hset(`url:${savedShortURL[0].short_url}`, {
+            long_url,
+        });
+        await redis.expire(`url:${savedShortURL[0].short_url}`, 300); // 5 min
+        await redis.set(clicksKey(savedShortURL[0].short_url), '0');
+    } catch (err) {
+        console.warn('Redis Caching Failed: ' + err);
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, 'Short URL Generated Successfully', savedShortURL[0]));
 });
 
 const redirectShortUrl = asyncHandler(async (req, res) => {
@@ -60,9 +127,10 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 	const result_in_cache = await redis.hgetall(redis_key);
 
 	if (Object.keys(result_in_cache).length !== 0) {
-		console.log('Result Found in Redis ');
-		await redis.hincrby(redis_key, 'click_count', 1);
-		return res.redirect(result_in_cache.long_url);
+		console.log('Redirection Result Found in Redis ');
+		await redis.incr(clicksKey(shorturl));
+		await redis.sadd(DIRTY_SET_KEY, shorturl);
+		return res.redirect(302,result_in_cache.long_url);
 	}
 
 	const result = await db
@@ -79,30 +147,36 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 	try {
 		await redis.hset(redis_key, {
 			long_url: result[0].long_url,
-			click_count: 1,
 		});
 		await redis.expire(redis_key, 300);
+		await redis.incr(clicksKey(shorturl));
+		await redis.sadd(DIRTY_SET_KEY, shorturl);
 	} catch (err) {
 		console.warn('Redis Caching Failed: ' + err);
 	}
-
-	return res.redirect(result[0].long_url);
+	
+	console.log(result[0].long_url);
+	
+	return res.redirect(302,result[0].long_url);
 });
 
 const getClickCount = asyncHandler(async (req, res) => {
 	const { shorturl } = req.params;
-	const redis_key = `url:${shorturl}`;
-
+	const userid = req.user.id
+	
 	// Read Redis
 	const clicksInRedis = Number(
-		(await redis.hget(redis_key, 'click_count')) || 0,
+		(await redis.get(clicksKey(shorturl))) || 0,
 	);
+
+	console.log("Click from redis: "+clicksInRedis);
+	
 
 	// Read DB
 	const clicksFromDb = await db
 		.select({ click_count: urlTable.click_count })
 		.from(urlTable)
-		.where(eq(urlTable.short_url, shorturl))
+		.where(and(eq(userid,urlTable.user_id),eq(urlTable.short_url,shorturl)))
 		.limit(1);
 
 	if (!clicksFromDb.length) throw new ApiError(404, 'No Such URL exists');

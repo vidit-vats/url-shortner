@@ -1,12 +1,13 @@
 import { app } from './app.js';
 import 'dotenv/config';
-import { cronjob } from './utils/cronjob.utils.js';
+import { ensureClickSyncRepeatJob } from './queues/clickSync.queue.js';
+import './workers/clickSync.worker.js';
 
 const PORT = process.env.PORT || 5000;
 
-cronjob();
+await ensureClickSyncRepeatJob();
 
 app.listen(PORT, () => {
-	console.log(`  PSQL Running `);
-	console.log(`  Express running on PORT: ${PORT}`);
+	console.log(`  PostgreSQL Running `);
+	console.log(`  Express.js running on PORT: ${PORT}`);
 });

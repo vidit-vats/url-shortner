@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { usersTable } from '../models/index.js';
+import { urlTable, usersTable } from '../models/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
@@ -106,7 +106,6 @@ const loginUser = asyncHandler(async (req, res) => {
 
 	const options = {
 		httpOnly: true,
-		secure: true,
 	};
 
 	const { access_token } = await generateAccessToken(userid);
@@ -120,7 +119,6 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-	console.log('Access Token: ' + req.cookies.access_token);
 	await db
 		.update(usersTable)
 		.set({
@@ -156,8 +154,10 @@ const new_refresh_token = asyncHandler(async (req, res) => {
 
 	const cookieOptions = {
 		httpOnly: true,
-		secure: true,
 	};
+
+	res.clearCookie("access_token");
+	res.clearCookie("refresh_token");
 
 	return res
 		.cookie('access_token', access_token, cookieOptions)
@@ -279,6 +279,28 @@ const googleLogin = asyncHandler(async (req, res) => {
 	);
 });
 
+const allURLs = asyncHandler(async(req,res)=>{
+// 	const userid = req.user.id
+
+//  const page = Math.max(Number(req.query.page) || 1, 1);
+//   const limit = Math.min(Number(req.query.limit) || 10, 50); 
+//  const offset = (page - 1) * limit;
+
+// 	const urls = await db.select({
+// 		short_url : urlTable.short_url,
+// 		long_url : urlTable.long_url,
+// 		clicks: urlTable.click_count
+// 	}).from(urlTable).where(eq(urlTable.user_id,userid))
+
+// const total = Number(totalResult[0].count);
+//   const totalPages = Math.ceil(total / limit);
+
+// 	return res.status(200).json(new ApiResponse(200,"All URLs returned sucessfully",{
+// 		count: allURLs.length,
+// 		urls
+// 	}))
+})
+
 export {
 	registerUser,
 	loginUser,
@@ -287,4 +309,5 @@ export {
 	grantForgotToken,
 	resetPassword,
 	googleLogin,
+	allURLs
 };

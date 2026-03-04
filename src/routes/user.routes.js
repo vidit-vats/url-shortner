@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+	allURLs,
 	googleLogin,
 	grantForgotToken,
 	loginUser,
@@ -44,6 +45,8 @@ router.route('/refresh-token').post(new_refresh_token);
 
 router.use(validateJWT);
 
+// router.route("/me/urls").get(allURLs)
 router.route('/logout').post(logoutUser);
+
 
 export default router;
