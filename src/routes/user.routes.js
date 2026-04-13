@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import {
-	allURLs,
-	googleLogin,
+	currentUserDetails,
 	grantForgotToken,
 	loginUser,
 	logoutUser,
@@ -14,39 +13,26 @@ import { loginSchemaValidation } from '../middlewares/userlogin.middlewares.js';
 import { validateJWT } from '../middlewares/auth.middlewares.js';
 import { checkForgotToken } from '../middlewares/checkForgotToken.middlewares.js';
 import { limiter } from '../middlewares/ratelimit.middlewares.js';
-import passport from '../utils/passport.utils.js';
+import { google_login } from '../controllers/user.controllers.js';
 
 const router = Router();
 
 router.route('/register').post(validationMiddleware, registerUser);
 router.route('/login').post(loginSchemaValidation, loginUser);
+
+router.route('/google-login').post(google_login);
+
 router.route('/forgot-password').post(limiter, grantForgotToken);
 router.route('/reset-password').post(checkForgotToken, resetPassword);
-
-router.route('/google').get(
-	passport.authenticate('google', {
-		scope: ['profile', 'email'],
-		session: false,
-	}),
-);
-
-router.route('/google/callback').get(
-	passport.authenticate('google', {
-		session: false,
-		failWithError: true,
-		failureRedirect: '/login',
-	}),
-	googleLogin,
-);
-// Google Login Ends
 
 // Refresh Token Route
 router.route('/refresh-token').post(new_refresh_token);
 
 router.use(validateJWT);
 
+router.route('/').get(currentUserDetails);
+
 // router.route("/me/urls").get(allURLs)
 router.route('/logout').post(logoutUser);
-
 
 export default router;

@@ -1,5 +1,6 @@
-import { pgTable, text, uuid, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, integer, timestamp } from 'drizzle-orm/pg-core';
 import { usersTable } from './user.models.js';
+import { sql } from 'drizzle-orm';
 
 export const urlTable = pgTable('urltable', {
 	id: uuid().primaryKey().defaultRandom(),
@@ -9,4 +10,5 @@ export const urlTable = pgTable('urltable', {
 	user_id: uuid()
 		.notNull()
 		.references(() => usersTable.id, { onDelete: 'cascade' }),
+	created_at : timestamp("created_at",{mode: "date",withTimezone: true}).notNull().default(sql`now()`)
 });

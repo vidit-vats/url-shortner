@@ -2,5 +2,6 @@ import { usersTable } from './user.models.js';
 import { urlTable } from './urltable.models.js';
 import { userRelations } from './relations.js';
 import { urlRelations } from './relations.js';
+import { providerEnum } from './enums.models.js';
 
-export { usersTable, urlTable, userRelations, urlRelations };
+export { usersTable, urlTable, userRelations, urlRelations, providerEnum };

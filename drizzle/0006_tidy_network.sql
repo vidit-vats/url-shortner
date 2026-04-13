@@ -1,1 +1,0 @@
-ALTER TABLE "urltable" ADD CONSTRAINT "urltable_short_url_unique" UNIQUE("short_url");

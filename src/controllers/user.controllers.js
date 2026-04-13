@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { count, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { urlTable, usersTable } from '../models/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -10,6 +10,16 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import path from 'path';
 import fs from 'fs/promises';
+import { OAuth2Client } from 'google-auth-library';
+
+function authCookieOptions() {
+	return {
+		httpOnly: true,
+		secure: process.env.NODE_ENV === 'production',
+		sameSite: 'lax',
+		path: '/',
+	};
+}
 
 async function generateHashedPassword(password) {
 	return bcrypt.hash(password, 10);
@@ -93,51 +103,118 @@ const loginUser = asyncHandler(async (req, res) => {
 		.from(usersTable)
 		.where(eq(usersTable.username, username));
 
-	if (!userExists) throw new ApiError(400, 'No such user exists');
+	if (userExists.length === 0) throw new ApiError(400, 'No such user exists');
 
 	const isPasswordCorrect = await comparePassword(
 		password,
 		userExists[0].hashedPassword,
 	);
 
-	if (!isPasswordCorrect) throw new ApiError(400, 'Wrong Password Supplied');
+	if (!isPasswordCorrect) throw new ApiError(401, 'Wrong Password Supplied');
 
 	const userid = userExists[0].id;
 
-	const options = {
-		httpOnly: true,
-	};
-
 	const { access_token } = await generateAccessToken(userid);
 	const { refresh_token } = await generateRefreshToken(userid);
+	const opts = authCookieOptions();
 
 	return res
-		.cookie('access_token', access_token, options)
-		.cookie('refresh_token', refresh_token, options)
+		.cookie('access_token', access_token, opts)
+		.cookie('refresh_token', refresh_token, opts)
 		.status(200)
 		.json(new ApiResponse(200, 'User Logged In'));
+});
+
+const google_login = asyncHandler(async (req, res) => {
+	const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+	const { id_token } = req.body;
+	if (!id_token) throw new ApiError(400, 'id_token not given');
+
+	const verify_token = await googleClient.verifyIdToken({
+		idToken: id_token,
+		audience: process.env.GOOGLE_CLIENT_ID,
+	});
+
+	const payload = verify_token.getPayload();
+	if (!payload.email_verified) throw new ApiError(400, 'Email not verified');
+
+	const result = await db
+		.select()
+		.from(usersTable)
+		.where(eq(usersTable.google_id, payload.sub));
+	let user = result[0];
+
+	if (!user) {
+		const inserted = await db
+			.insert(usersTable)
+			.values({
+				google_id: payload.sub,
+				email: payload.email,
+				name: payload.name,
+				username: payload.name,
+			})
+			.returning();
+		user = inserted[0];
+	}
+
+	const access_token = jwt.sign(
+		{ id: user.id },
+		process.env.ACCESS_TOKEN_SECRET,
+		{ expiresIn: process.env.ACCESS_TOKEN_EXPIRY },
+	);
+
+	const refresh_token = jwt.sign(
+		{ id: user.id },
+		process.env.REFRESH_TOKEN_SECRET,
+		{ expiresIn: process.env.REFRESH_TOKEN_EXPIRY },
+	);
+
+	await db
+		.update(usersTable)
+		.set({ refresh_token })
+		.where(eq(usersTable.id, user.id));
+
+	res.cookie('access_token', access_token, {
+		httpOnly: true,
+		// secure: true,
+		// sameSite: 'strict',
+		maxAge: 15 * 60 * 1000, // 15 minutes in ms
+	});
+
+	res.cookie('refresh_token', refresh_token, {
+		httpOnly: true,
+		// secure: true,
+		// sameSite: 'strict',
+		maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+	});
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, 'Google Login Successful'));
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
 	await db
 		.update(usersTable)
-		.set({
-			refresh_token: null,
-		})
+		.set({ refresh_token: null })
 		.where(eq(usersTable.id, req.user.id));
 
+	const opts = authCookieOptions();
+
 	return res
-		.clearCookie('access_token')
-		.clearCookie('refresh_token')
+		.clearCookie('access_token', opts)
+		.clearCookie('refresh_token', opts)
 		.status(200)
 		.json(new ApiResponse(200, 'User Logged Out'));
 });
 
 const new_refresh_token = asyncHandler(async (req, res) => {
-	const oldRefreshToken = req.cookies?.refresh_token;
+	const oldRefreshToken =
+		req.cookies?.refresh_token || req.body?.refresh_token;
 
 	if (!oldRefreshToken) {
-		throw new ApiError(401, 'Refresh token missing');
+		throw new ApiError(401, 'Refresh token missing (cookie or body)');
 	}
 
 	let decoded;
@@ -151,24 +228,13 @@ const new_refresh_token = asyncHandler(async (req, res) => {
 
 	const { access_token } = await generateAccessToken(user_id);
 	const { refresh_token } = await generateRefreshToken(user_id);
-
-	const cookieOptions = {
-		httpOnly: true,
-	};
-
-	res.clearCookie("access_token");
-	res.clearCookie("refresh_token");
+	const opts = authCookieOptions();
 
 	return res
-		.cookie('access_token', access_token, cookieOptions)
-		.cookie('refresh_token', refresh_token, cookieOptions)
+		.cookie('access_token', access_token, opts)
+		.cookie('refresh_token', refresh_token, opts)
 		.status(200)
-		.json(
-			new ApiResponse(
-				200,
-				'New Access Token and Refresh Token Generated',
-			),
-		);
+		.json(new ApiResponse(200, 'New access and refresh tokens issued'));
 });
 
 const grantForgotToken = asyncHandler(async (req, res) => {
@@ -258,48 +324,71 @@ const resetPassword = asyncHandler(async (req, res) => {
 		})
 		.where(eq(usersTable.forgot_password_token, req.hashed_reset_token));
 
+	const opts = authCookieOptions();
+
 	return res
-		.clearCookie('access_token')
-		.clearCookie('refresh_token')
+		.clearCookie('access_token', opts)
+		.clearCookie('refresh_token', opts)
 		.status(200)
 		.json(new ApiResponse(200, 'Password Changed Successfully'));
 });
 
-const googleLogin = asyncHandler(async (req, res) => {
-	const userid = req.user.id;
+const allURLs = asyncHandler(async (req, res) => {
+	const userId = req.user.id;
 
-	const { access_token } = await generateAccessToken(userid);
-	const { refresh_token } = await generateRefreshToken(userid);
+	const page = Math.max(parseInt(req.query.page) || 1, 1); // default page 1
+	const limit = Math.min(parseInt(req.query.limit) || 10, 50); // default 10, max 50
+	const offset = (page - 1) * limit;
+
+	const totalResult = await db
+		.select({ total: count() })
+		.from(urlTable)
+		.where(eq(urlTable.user_id, userId));
+
+	console.log(totalResult);
+
+	const total = Number(totalResult[0].total);
+
+	const data = await db
+		.select()
+		.from(urlTable)
+		.where(eq(urlTable.user_id, userId))
+		.orderBy(desc(urlTable.id))
+		.limit(limit)
+		.offset(offset);
 
 	return res.status(200).json(
-		new ApiResponse(200, 'Google Login Successful', {
-			access_token,
-			refresh_token,
+		new ApiResponse(200, 'Fetched Successfully', {
+			page: page,
+			limit: limit,
+			total: total,
+			totalPages: Math.ceil(total / limit),
+			records: data,
 		}),
 	);
 });
 
-const allURLs = asyncHandler(async(req,res)=>{
-// 	const userid = req.user.id
+const currentUserDetails = asyncHandler(async (req, res) => {
+	const [user_details] = await db
+		.select({
+			username: usersTable.username,
+			name: usersTable.name,
+			address: usersTable.address,
+			email: usersTable.email,
+		})
+		.from(usersTable)
+		.where(eq(usersTable.id, req.user.id));
 
-//  const page = Math.max(Number(req.query.page) || 1, 1);
-//   const limit = Math.min(Number(req.query.limit) || 10, 50); 
-//  const offset = (page - 1) * limit;
-
-// 	const urls = await db.select({
-// 		short_url : urlTable.short_url,
-// 		long_url : urlTable.long_url,
-// 		clicks: urlTable.click_count
-// 	}).from(urlTable).where(eq(urlTable.user_id,userid))
-
-// const total = Number(totalResult[0].count);
-//   const totalPages = Math.ceil(total / limit);
-
-// 	return res.status(200).json(new ApiResponse(200,"All URLs returned sucessfully",{
-// 		count: allURLs.length,
-// 		urls
-// 	}))
-})
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(
+				200,
+				'User Details Returned Successfully',
+				user_details,
+			),
+		);
+});
 
 export {
 	registerUser,
@@ -308,6 +397,7 @@ export {
 	new_refresh_token,
 	grantForgotToken,
 	resetPassword,
-	googleLogin,
-	allURLs
+	allURLs,
+	google_login,
+	currentUserDetails,
 };

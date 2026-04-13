@@ -1,1 +1,0 @@
-ALTER TABLE "users" ALTER COLUMN "forgot_password_token_expiry" SET DATA TYPE timestamp with time zone;

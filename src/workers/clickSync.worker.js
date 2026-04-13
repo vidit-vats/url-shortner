@@ -48,7 +48,13 @@ export const clickSyncWorker = new Worker(
 						// If this throws, BullMQ will retry the job.
 						await incrementDb(shortId, delta);
 						// On success, subtract the applied delta so any new clicks stay in Redis.
-						await redis.decrby(key, delta);
+						// await redis.decrby(key, delta);
+
+						const newVal = await redis.decrby(key, delta);
+
+						if (newVal === 0) {
+							await redis.del(key);
+						}
 					} catch (err) {
 						// Do NOT modify Redis on failure; the full delta stays for the retry.
 						throw err;
@@ -63,4 +69,3 @@ export const clickSyncWorker = new Worker(
 		lockDuration: 60_000,
 	},
 );
-
