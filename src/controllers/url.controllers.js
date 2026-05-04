@@ -37,7 +37,6 @@ const shortUrl = asyncHandler(async (req, res) => {
 					long_url: urlTable.long_url,
 					short_url: urlTable.short_url,
 					user_id: urlTable.user_id,
-					click_count: urlTable.click_count,
 				});
 
 			// If insert succeeds, break the loop
@@ -90,40 +89,50 @@ const redirectShortUrl = asyncHandler(async (req, res) => {
 	const { shorturl } = req.params;
 	const redis_key = `url:${shorturl}`;
 
-	const result_in_cache = await redis.hgetall(redis_key);
+	const cachedLongUrl = await redis.hget(redis_key, 'long_url');
 
-	if (Object.keys(result_in_cache).length !== 0) {
-		console.log('Redirection Result Found in Redis ');
-		await redis.incr(clicksKey(shorturl));
-		await redis.sadd(DIRTY_SET_KEY, shorturl);
-		return res.redirect(302, result_in_cache.long_url);
+	if (cachedLongUrl) {
+		console.log('Redirection Result Found in Redis');
+
+		res.redirect(302, cachedLongUrl);
+
+		// fire-and-forget
+		redis.incr(clicksKey(shorturl));
+		redis.sadd(DIRTY_SET_KEY, shorturl);
+
+		return;
 	}
 
 	const result = await db
 		.select({
 			long_url: urlTable.long_url,
-			click_count: urlTable.click_count,
 		})
 		.from(urlTable)
 		.where(eq(urlTable.short_url, shorturl))
 		.limit(1);
 
-	if (result.length === 0) throw new ApiError(404, 'No Such URL exists');
-
-	try {
-		await redis.hset(redis_key, {
-			long_url: result[0].long_url,
-		});
-		await redis.expire(redis_key, 300);
-		await redis.incr(clicksKey(shorturl));
-		await redis.sadd(DIRTY_SET_KEY, shorturl);
-	} catch (err) {
-		console.warn('Redis Caching Failed: ' + err);
+	if (result.length === 0) {
+		throw new ApiError(404, 'No Such URL exists');
 	}
 
-	console.log(result[0].long_url);
+	const longUrl = result[0].long_url;
 
-	return res.redirect(302, result[0].long_url);
+	console.log(longUrl);
+
+	res.redirect(302, longUrl);
+
+	(async () => {
+		try {
+			await Promise.all([
+				redis.hset(redis_key, { long_url: longUrl }),
+				redis.expire(redis_key, 300),
+				redis.incr(clicksKey(shorturl)),
+				redis.sadd(DIRTY_SET_KEY, shorturl),
+			]);
+		} catch (err) {
+			console.warn('Redis Caching Failed:', err);
+		}
+	})();
 });
 
 const getClickCount = asyncHandler(async (req, res) => {
@@ -161,8 +170,9 @@ const particularURLDetail = asyncHandler(async (req, res) => {
 	const [findURLDetail] = await db
 		.select({
 			long_url: urlTable.long_url,
-			short_url: urlTable.short_url,
 			click_count: urlTable.click_count,
+			created_at: urlTable.created_at,
+			user_id: urlTable.user_id,
 		})
 		.from(urlTable)
 		.where(

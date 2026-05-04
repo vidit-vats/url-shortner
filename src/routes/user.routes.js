@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import {
-	currentUserDetails,
 	grantForgotToken,
 	loginUser,
 	logoutUser,
@@ -17,22 +16,21 @@ import { google_login } from '../controllers/user.controllers.js';
 
 const router = Router();
 
-router.route('/register').post(validationMiddleware, registerUser);
-router.route('/login').post(loginSchemaValidation, loginUser);
-
-router.route('/google-login').post(google_login);
-
-router.route('/forgot-password').post(limiter, grantForgotToken);
-router.route('/reset-password').post(checkForgotToken, resetPassword);
-
+// Register Route
+router.route('/auth/register').post(validationMiddleware, registerUser);
+// Login Route
+router.route('/auth/login').post(loginSchemaValidation, loginUser);
+// Google Login OIDC Route
+router.route('/auth/google').post(google_login);
+// Forgot Password Route
+router.route('/auth/forgot-password').post(limiter, grantForgotToken);
+// Reset Password Route
+router.route('/auth/reset-password').post(checkForgotToken, resetPassword);
 // Refresh Token Route
-router.route('/refresh-token').post(new_refresh_token);
-
+router.route('/auth/refresh').post(new_refresh_token);
+// Validate JWT Middleware
 router.use(validateJWT);
-
-router.route('/').get(currentUserDetails);
-
-// router.route("/me/urls").get(allURLs)
-router.route('/logout').post(logoutUser);
+// Logout Route
+router.route('/auth/logout').post(logoutUser);
 
 export default router;
